@@ -1,0 +1,252 @@
+
+# coding: utf-8
+
+# A copy of the original email sent ot me detailing what I am supposed to do.
+#
+# "Since multiple interactions can be curated from the same paper and interactions between the same two genes/gene products, A-B, can be curated from multiple papers, we'd also like to know how many distinct gene pairs are represented in IMEx, how many in FlyBase and how many gene pairs they have in common. This will be your mission.
+#
+# One little difficulty in this task is that the FlyBase.txt file uses FlyBase gene IDs ( FBgn numbers) in columns 1 and 2 while the Dmel_intact2.txt file mostly uses UniProt IDs so we need to convert the UniProt IDs to FBgn IDs. We haven't yet done this conversion but if you'd like to think about that I'm including an ID mapping file, idmapping2.txt, which has UniProt IDs in column 1 and FBgn IDs in column 2. We will also send you updated files with IDs that can be directly compared when we have them. This is just to get you started thinking about the project."
+#
+# I interpreted this as writing code to first find all unique interactions in both the imex data and the FB data and then compare the two to see how many unique interactions the data sets shared with each other.
+
+# Below is Julie's code for checking how many publications Imex and FlyBase have in common.  I re-used a bunch of the code in order to avoid re-inventing the wheel.
+
+# In[66]:
+
+
+#import re for regex and os for directory management.
+
+import re
+import os
+from collections import Counter
+
+#changes directory to local user's favorite folder.
+
+os.chdir(r"D:\Python\FlyBase_Py\\")
+
+
+# In[67]:
+
+
+#!/usr/bin/env1 python3
+
+# Read in interactions from imex file
+# Specify file path
+
+imex_file = 'Dmel_intact2.txt'
+
+# Initialize a set to hold pubs from imex file
+imex_pubs = set()
+
+
+
+# Open file and read line by line
+with open(imex_file) as file_object:
+    for line in file_object:
+        # Split line on tabs (\t) and put into list called data
+        data = line.split('\t')
+
+        # If the line does not start with #, i.e. is not a header
+        if '#' not in data[0]:
+            # Get info in column 5
+            pubs = data[4].rstrip('\n').split('|')
+            # Iterate over pub ids and grab pubmed id and add to set
+            for pub in pubs:
+                if 'pubmed' in pub:
+                    pmid = pub.split(':')
+                    imex_pubs.add(pmid[1])
+
+# Read in interactions from FB file
+# Specify file path
+FB_file = 'FlyBase.txt'
+
+# Initialize a set to hold pubs from imex file
+FB_pubs = set()
+
+
+# Open file and read line by line
+with open(FB_file) as file_object:
+    for line in file_object:
+
+        # Split line on tabs (\t) and put into list called data
+        data = line.split('\t')
+
+        # If the line does not start with #, i.e. is not a header
+        if '#' not in data[0]:
+            # Get info in column 5
+            pubs = data[4].rstrip('\n').split('|')
+            # Iterate over pub ids and grab pubmed id and add to set
+            for pub in pubs:
+                if 'pubmed' in pub:
+                    pmid = pub.split(':')
+                    FB_pubs.add(pmid[1])
+
+
+print(len(FB_pubs),' pubs curated for interactions in FB')
+print(len(imex_pubs),' pubs curated for interactions in imex')
+
+# Find intersection of two sets
+common = FB_pubs.intersection(imex_pubs)
+
+
+
+print(len(common),' pubs in common')
+print('Imex has curated ',len(common)*100/len(FB_pubs),' percent of pubs curated by FB')
+
+
+
+
+
+# This code snippet takes the gene ID map file that Julie sent me and places the values into a dictionary.  Dictionary keys are Imex IDs and dict values are FB IDs.  I have two files that can be usedt o create this dictionary.  One is the original file Julie sent and the other is a file that I updated to include more IDs based on the results of the error handling code in the method ID_mapper.
+#
+# TODO:
+# DONE. I have not tested the new file that I've generated but it should inculde another handler that catches duplicate keys.
+# Used the new list and generated a new set of interactors.  Now to confirm if the ID map that I used from uniprot is good.
+
+# In[68]:
+
+
+# import the file that maps imex IDs to FB IDs.
+map_file = 'idmapping3.txt'
+
+#Initialize a dictionary object to store the IDs from the input file.
+map_dict = dict()
+
+#Loop through the file and assign an imex ID as a key with its corresponding FB ID as the dict value.
+with open(map_file) as file_object:
+    for line in file_object:
+        map_data = line.split('\t')
+        map_dict [map_data[0]] = map_data[1].rstrip('\n')
+
+
+
+
+
+
+
+
+# ID_mapper is a short method for using the dictionary generated above (map_dict) to generate a tuple holding the Imex ID and the FBgn ID.  The method takes two strings and a dictionary as input.  Imex IDs from each individual interaction (str1 and str2 for the first and second interactor respecitvely), uses them as keys for the dictionary (mdict, the mapping dictionary generated above).  The method takes the input strings and uses them to then access the corresponding values in the dictionary and returns a sorted tuple that has FB IDs swapped in for Imex IDs.  If a key is not found in the dictionary, the value of the input string, an Imex ID, is then apended to a list.  I have used this list to create a larger list of Imex to FB IDs using the uniprot ID mapper on the website.
+#
+#
+#
+# TODO:
+# 1. For some reason the list ends up being a list of tuples containing the Imex IDs of both interactors, although I only want a list of single values.  Not sure why this is.  I would like the handler to return a list that includes only IDs that are not found in the map document and not tuples.  As it stands now, the handler only captures the first column of the pair of interactors and thus may miss some IDs that are missing from the orignial map document.
+#
+# 2. DONE.  The method's return statement is cumbersome.  I had originally used a frozenset but changed it during debugging before I realized that my issue was related to the strings being input and not to the type of immutable object being returned.  This could probably be changed back into a frozenset.
+
+# In[69]:
+
+
+def ID_mapper(str1, str2, mdict):
+    try:
+        return frozenset([mdict[str1], mdict[str2]])
+    except KeyError:  #handles keyerror if the Imex ID is not found in the dictionary.
+        #Write list of errors to a file that can be used later
+
+        #with open(r'D:\Python\FlyBase_Py\error_list.txt','a+') as f:
+            #f.write(str1 +'\n')
+        #f.close()
+        return
+
+
+# This section opens the Imex interaction file and parses it so that the interactors are captured into a tuple.  The tuple gets sorted in the ID_mapper function so that each tuple has the same order of IDs.  This should disallow duplicate tuples within the set.
+
+# In[70]:
+
+
+
+
+
+#!/usr/bin/env1 python3
+
+# Read in interactions from imex file
+# Specify file path
+imex_file = r'Dmel_intact2.txt'
+
+# Initialize a set to hold pubs from imex file
+imex_interactors = set()
+
+
+
+
+# Open file and read line by line
+with open(imex_file) as file_object:
+    for line in file_object:
+
+        # Split line on tabs (\t) and put into a list called data
+
+        data = line.split('\t')
+
+        # If the line does not start with #, i.e. is not a header
+        # line must start with a 'u' to signify a uniprot ID and not something else.
+
+        if '#' not in data[0] and 'u' in data[0] and 'u' in data[1]:
+            # Get ID of interactor in column 1 and column 2 and place into a tuple.
+            # Strip the string of unnecessary characters, assign to str1 and str2, and send
+            # both strings and the ID dictionary (map_dict) to the function 'ID_mapper'.
+
+            str1 = (re.split('[\W]+', data[0])[1])
+            str2 = (re.split('[\W]+', data[1])[1])
+            imex_interactors.add(ID_mapper(str1,str2,map_dict))
+
+
+
+
+
+
+
+
+
+# This section opens the FB interaction file and parses it so that the interactors are captured into a tuple.  Tuples are sorted and placed in a set.
+#
+# TODO:
+# 1. DONE.  As above, the code that captures the tuple is cumbersome and might be prettier if frozensets are used.
+# 2. DONE.  The IDs can probably be stripped of unnecessary text using REGEX as in the Imex section of the code.  This also would be less cumbersome.
+
+# In[71]:
+
+
+
+
+#!/usr/bin/env1 python3
+
+# Read in interactions from imex file
+# Specify file path
+FB_file = 'FlyBase.txt'
+
+# Initialize a set to hold pubs from imex file
+FB_interactors = set()
+
+
+
+
+# Open file and read line by line
+with open(FB_file) as file_object:
+    for line in file_object:
+
+        # Split line on tabs (\t) and put into a list called data
+        data = line.split('\t')
+        # If the line does not start with #, i.e. is not a header
+        if '#' not in data[0]:
+            # Get ID of interactor in column 1 and column 2 and place into a frozen set.
+            FB_interactors.add(frozenset((re.split('[\W]+', data[0])[1],re.split('[\W]+', data[1])[1])))
+
+
+
+
+
+# This section runs the numbers from the above code and finds the intersection between the Imex set and the FB set.  The run below uses the ID mapping file Julie sent.
+#
+# TODO:
+# DONE.  Run everything again using the new ID file I generated.
+
+# In[72]:
+
+
+print('FlyBase has captured ' + str(len(FB_interactors)) + ' unique interactions.')
+print('Imex has captured ' + str(len(imex_interactors)) + ' unique interactions.')
+
+int_in_common = FB_interactors.intersection(imex_interactors)
+int_in_common2  = imex_interactors.intersection(FB_interactors)
+print('FlyBase and Imex have captured ' + str(len(int_in_common)) + ' in common.')
+print (len(int_in_common2))
